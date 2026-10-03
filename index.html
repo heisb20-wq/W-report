@@ -48,14 +48,28 @@ th{color:var(--muted);font-weight:500;font-size:13px}
 textarea{width:100%;min-height:120px;font:13px monospace;direction:ltr;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;margin-top:8px}
 svg text{font-family:inherit}
 .hide{display:none}
-@media print{body{background:#fff;color:#000}nav,header .noprint,.bar,.noprint{display:none!important}.panel{border:0;padding:0}}
+.hdr-r{display:flex;gap:12px;align-items:flex-end}
+#clk{font-weight:800;font-size:20px;color:var(--accent);padding-bottom:9px;white-space:nowrap;direction:ltr}
+.sig{margin-top:22px;font-size:12px;color:var(--muted);text-align:left;unicode-bidi:plaintext;word-break:break-all}
+/* منطقة التقرير النظيف (للطباعة و PDF) */
+#pa{position:fixed;left:-10000px;top:0;width:210mm;background:#fff;color:#12303b;padding:10mm 12mm 18mm;font-size:14px;line-height:1.6;--muted:#5b7580;--line:#d3dfe4;--ok:#14733f;--okbg:#e2f4ea;--bad:#b3261e;--badbg:#fbe6e4;--accent:#0b5d7a;--surface:#fff;--ink:#12303b}
+#pa h1{font-size:22px;margin:0 0 12px}
+#pa h2{font-size:16px;margin:0 0 10px;color:#12303b}
+#pa .panel{background:#fff;border:0;padding:0;margin-bottom:14px}
+#pa .grid{grid-template-columns:repeat(3,1fr);gap:8px 14px}
+#pa .m b{font-size:22px}
+#pa .scroll{overflow:visible}
+#pa table{min-width:0;font-size:10.5px}
+#pa th,#pa td{white-space:normal;padding:6px 3px}
+#pa .status{font-size:22px;padding:14px}
+@media print{html,body{background:#fff!important;height:auto}:root{padding:0}.wrap{display:none!important}#pa{position:static;left:auto;width:210mm;margin:0}}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
 <header>
 <h1>متابعة التوريد مقابل السحب</h1>
-<div class="noprint" style="width:170px"><label for="dt">التاريخ</label><input id="dt" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10"></div>
+<div class="hdr-r noprint"><div style="width:160px"><label for="dt">التاريخ</label><input id="dt" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10"></div><div id="clk" aria-label="الساعة"></div></div>
 </header>
 <nav class="noprint" role="tablist" id="nav"></nav>
 <main id="v"></main>
@@ -65,10 +79,16 @@ var T=[["04:00",4],["08:00",8],["12:00",12],["16:00",16],["20:00",20],["23:59",2
 var LB={"04:00":"4:00 AM","08:00":"8:00 AM","12:00":"12:00 PM","16:00":"4:00 PM","20:00":"8:00 PM","23:59":"11:59 PM"};
 function L(t){return LB[t]||t}
 function en(s){return String(s).replace(/[\u0660-\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\u06F0-\u06F9]/g,function(c){return c.charCodeAt(0)-1776}).replace(/[\u066B\u060C]/g,".")}
+function clockStr(){return new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true})}
 var KEY="svc-readings-v2",mem={},tab="dash",date=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),pending=null,msg="";
 function load(){try{var r=localStorage.getItem(KEY);return r?JSON.parse(r):mem}catch(e){return mem}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){mem=db}}
 var db=load();
+var SK="svc-settings-v1",S={sig:"",showTank:true};
+try{var q0=localStorage.getItem(SK);if(q0)S=Object.assign(S,JSON.parse(q0))}catch(e){}
+function saveS(){try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}}
+function esc(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function sigHtml(){return S.sig?'<div class="sig">'+esc(S.sig)+"</div>":""}
 function n(x,d){if(x==null||isNaN(x))return"—";return Number(x.toFixed(d==null?2:d)).toLocaleString("en-US")}
 function sg(x){return(x>0?"+":"")+n(x)}
 function rows(d){var o=db[d]||{},mode=o._mode||"period",out=[],ps=0,pc=0,sS=0,sC=0,t0=(o._open==null?null:o._open);
@@ -78,8 +98,8 @@ var aS=S/h,aC=C/h,df=aS-aC;out.push({t:t[0],h:h,c:C,s:S,ps:pS,pc:pC,aC:aC,aS:aS,
 function cov(r){return r.c>0?r.s/r.c*100:null}
 function stTxt(ok){return ok?"🟢 التوريد مساوي أو أعلى من السحب":"🔴 التوريد أقل من السحب"}
 function cls(ok){return ok?"ok-t":"bad-t"}
-function summary(r,label){var c=cov(r);var dc='<span class="'+cls(r.ok)+'" style="display:inline;color:inherit">';
-var tk=r.tank==null?m("رصيد الخزان الحالي","—","أدخل رصيد بداية اليوم"):m("رصيد الخزان الحالي",'<span class="'+(r.tank<0?"bad-t":"")+'" style="display:inline;color:inherit">'+n(r.tank)+"</span>","طن")+m("رصيد الخزان بداية اليوم",n(r.open),"طن");
+function summary(r,label,hideTank){var c=cov(r);var dc='<span class="'+cls(r.ok)+'" style="display:inline;color:inherit">';
+var tk=hideTank?"":r.tank==null?m("رصيد الخزان الحالي","—","أدخل رصيد بداية اليوم"):m("رصيد الخزان الحالي",'<span class="'+(r.tank<0?"bad-t":"")+'" style="display:inline;color:inherit">'+n(r.tank)+"</span>","طن")+m("رصيد الخزان بداية اليوم",n(r.open),"طن");
 return'<div class="grid">'+
 m("إجمالي كمية السحب",n(r.c),"طن")+m("إجمالي كمية التوريد",n(r.s),"طن")+tk+
 m("معدل السحب التراكمي",n(r.aC),"طن/ساعة")+m("معدل التوريد التراكمي",n(r.aS),"طن/ساعة")+
@@ -88,7 +108,7 @@ m(label,dc+sg(r.cd)+"</span>","طن")+
 m("نسبة تغطية التوريد",c==null?"—":n(c)+"%","")+
 m("الساعات المحتسبة",n(r.h),"ساعة")+"</div>"}
 function m(a,b,u){return'<div class="m"><span>'+a+"</span><b>"+b+(u?" <i>"+u+"</i>":"")+"</b></div>"}
-function table(rs){if(!rs.length)return'<p style="color:var(--muted)">لا توجد قراءات لهذا اليوم بعد.</p>';var tk=rs[0].tank!=null;
+function table(rs,hideTank){if(!rs.length)return'<p style="color:var(--muted)">لا توجد قراءات لهذا اليوم بعد.</p>';var tk=rs[0].tank!=null&&!hideTank;
 var h="<div class=scroll><table><tr><th>الوقت</th><th>سحب الفترة</th><th>توريد الفترة</th><th>إجمالي السحب</th><th>إجمالي التوريد</th><th>معدل السحب/ساعة</th><th>معدل التوريد/ساعة</th><th>فرق المعدل</th><th>الفرق التراكمي</th>"+(tk?"<th>رصيد الخزان</th>":"")+"<th>الحالة</th></tr>";
 rs.forEach(function(r){h+="<tr><td>"+L(r.t)+"</td><td>"+n(r.pc)+"</td><td>"+n(r.ps)+"</td><td>"+n(r.c)+"</td><td>"+n(r.s)+"</td><td>"+n(r.aC)+"</td><td>"+n(r.aS)+'</td><td class="'+cls(r.ok)+'">'+sg(r.df)+'</td><td class="'+cls(r.ok)+'">'+sg(r.cd)+"</td>"+(tk?'<td class="'+(r.tank<0?"bad-t":"")+'">'+n(r.tank)+"</td>":"")+"<td>"+(r.ok?"🟢":"🔴")+"</td></tr>"});
 return h+"</table></div>"}
@@ -107,20 +127,21 @@ function entry(){var o=db[date]||{},mode=o._mode||"period",opt=T.map(function(t)
 return'<div class="panel"><h2>إعدادات اليوم</h2><div class="row2"><div><label for="md">طريقة الإدخال</label><select id="md"><option value="period"'+(per?" selected":"")+'>كمية الفترة (الإجمالي يُجمع تلقائيًا)</option><option value="cum"'+(per?"":" selected")+'>قيمة تراكمية منذ بداية اليوم</option></select></div><div><label for="op">رصيد الخزان في بداية اليوم (طن)</label><input id="op" type="text" inputmode="decimal" dir="ltr" placeholder="0" value="'+(o._open==null?"":o._open)+'"></div></div><div class="bar"><button class="btn alt" data-a="saveopen">حفظ رصيد البداية</button></div></div>'+
 '<div class="panel"><h2>إدخال القراءة</h2><p style="color:var(--muted);margin-top:0">'+(per?"أدخل كمية التوريد والسحب لهذه الفترة فقط. الإجمالي ورصيد الخزان يُحسبان تلقائيًا.":"أدخل القيم التراكمية منذ بداية اليوم، وليس كمية الفترة.")+'</p><div class="row2"><div><label for="tm">وقت القراءة</label><select id="tm">'+opt+'</select></div><div><label for="sp">'+(per?"كمية التوريد في الفترة (طن)":"التوريد التراكمي (طن)")+'</label><input id="sp" type="text" inputmode="decimal" dir="ltr" placeholder="0"></div><div><label for="cs">'+(per?"كمية السحب في الفترة (طن)":"السحب التراكمي (طن)")+'</label><input id="cs" type="text" inputmode="decimal" dir="ltr" placeholder="0"></div></div><div id="alert">'+msg+'</div><div class="bar"><button class="btn" data-a="save">حفظ القراءة</button></div></div><div class="panel"><h2>قراءات '+date+"</h2>"+table(rows(date))+"</div>"}
 function report(){var rs=rows(date);if(!rs.length)return'<div class="panel"><h2>تقرير متابعة التوريد والاستهلاك اليومي</h2><p>لا توجد قراءات لتاريخ '+date+".</p></div>";
-var l=rs[rs.length-1],fin=l.t==="23:59";
-return'<div class="panel"><h2>تقرير متابعة التوريد والاستهلاك اليومي</h2><p style="margin-top:0">التاريخ: <b>'+date+"</b> — عدد القراءات: "+rs.length+" من 6</p></div>"+
-'<div class="panel"><h2>'+(fin?"النتيجة النهائية — الإجماليات والمعدلات التراكمية":"النتيجة الحالية (اليوم لم يكتمل) — الإجماليات والمعدلات التراكمية")+"</h2>"+summary(l,fin&&l.cd<0?"العجز التراكمي":"الفرق التراكمي")+'<div class="status '+(l.ok?"ok":"bad")+'" style="margin:14px 0 0">'+stTxt(l.ok)+"</div></div>"+
-'<div class="panel"><h2>جدول القراءات</h2>'+table(rs)+"</div>"+
-'<div class="bar"><button class="btn" data-a="html">تنزيل التقرير للطباعة / PDF</button><button class="btn alt" data-a="csv">تنزيل CSV</button><button class="btn alt" data-a="print">طباعة</button></div><div id="csvbox"></div>'}
+var l=rs[rs.length-1],fin=l.t==="23:59",hide=!S.showTank;
+return'<div class="panel"><h2>تقرير متابعة التوريد والاستهلاك اليومي</h2><p style="margin-top:0">التاريخ: <b>'+date+'</b> — الساعة: <b dir="ltr" style="unicode-bidi:isolate">'+clockStr()+"</b> — عدد القراءات: "+rs.length+" من 6</p></div>"+
+'<div class="panel"><h2>'+(fin?"النتيجة النهائية — الإجماليات والمعدلات التراكمية":"النتيجة الحالية (اليوم لم يكتمل) — الإجماليات والمعدلات التراكمية")+"</h2>"+summary(l,fin&&l.cd<0?"العجز التراكمي":"الفرق التراكمي",hide)+'<div class="status '+(l.ok?"ok":"bad")+'" style="margin:14px 0 0">'+stTxt(l.ok)+"</div></div>"+
+'<div class="panel"><h2>جدول القراءات</h2>'+table(rs,hide)+"</div>"+sigHtml()+
+'<div class="bar"><label style="display:flex;gap:8px;align-items:center;margin:0;width:100%"><input type="checkbox" id="st2" style="width:auto;min-height:0"'+(S.showTank?" checked":"")+'>إظهار رصيد الخزان في التقرير</label><button class="btn" data-a="pdf">تنزيل PDF</button><button class="btn alt" data-a="csv">تنزيل CSV</button><button class="btn alt" data-a="print">طباعة</button></div><div id="csvbox"></div>'}
 function hist(){var from=hist.f||"",to=hist.t||"";var ds=Object.keys(db).sort().reverse().filter(function(d){return(!from||d>=from)&&(!to||d<=to)});
 var h='<div class="panel"><h2>التقارير السابقة</h2><div class="row2"><div><label for="hf">من</label><input id="hf" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10" value="'+from+'"></div><div><label for="ht">إلى</label><input id="ht" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10" value="'+to+'"></div></div>';
 if(!ds.length)return h+'<p style="color:var(--muted)">لا توجد تقارير في هذا النطاق.</p></div>';
 h+="<div class=scroll><table><tr><th>التاريخ</th><th>إجمالي السحب</th><th>إجمالي التوريد</th><th>معدل السحب</th><th>معدل التوريد</th><th>الفرق</th><th>التغطية</th><th>رصيد الخزان</th><th>الحالة</th><th></th></tr>";
 ds.forEach(function(d){var rs=rows(d),l=rs[rs.length-1];if(!l)return;var c=cov(l);h+="<tr><td>"+d+"</td><td>"+n(l.c)+"</td><td>"+n(l.s)+"</td><td>"+n(l.aC)+"</td><td>"+n(l.aS)+'</td><td class="'+cls(l.ok)+'">'+sg(l.df)+"</td><td>"+(c==null?"—":n(c)+"%")+"</td><td>"+(l.tank==null?"—":n(l.tank))+"</td><td>"+(l.ok?"🟢":"🔴")+'</td><td><button class="btn alt" style="min-height:36px;padding:4px 12px" data-open="'+d+'">فتح</button></td></tr>'});
 return h+'</table></div><div class="bar"><button class="btn alt" data-a="csvall">تنزيل CSV</button><button class="btn alt" data-a="reset">مسح كل البيانات</button></div><div id="csvbox"></div></div>'}
-var TABS=[["dash","لوحة المتابعة"],["entry","إدخال القراءة"],["report","التقرير اليومي"],["hist","التقارير السابقة"]];
+function settings(){return'<div class="panel"><h2>الإعدادات</h2><div style="margin-bottom:14px"><label for="sg">النص أسفل التقرير (يسار الصفحة): اسم أو رابط أو بريد</label><input id="sg" type="text" dir="auto" value="'+esc(S.sig)+'" placeholder="مثال: name@example.com"></div><label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:16px"><input type="checkbox" id="st" style="width:auto;min-height:0"'+(S.showTank?" checked":"")+'>إظهار رصيد الخزان في التقرير</label><div id="alert">'+msg+'</div><div class="bar"><button class="btn" data-a="savesettings">حفظ الإعدادات</button></div></div>'}
+var TABS=[["dash","لوحة المتابعة"],["entry","إدخال القراءة"],["report","التقرير اليومي"],["hist","التقارير السابقة"],["settings","الإعدادات"]];
 function render(){document.getElementById("nav").innerHTML=TABS.map(function(t){return'<button role="tab" aria-selected="'+(t[0]===tab)+'" data-tab="'+t[0]+'">'+t[1]+"</button>"}).join("");
-document.getElementById("v").innerHTML=({dash:dash,entry:entry,report:report,hist:hist})[tab]();
+document.getElementById("v").innerHTML=({dash:dash,entry:entry,report:report,hist:hist,settings:settings})[tab]();
 document.getElementById("dt").value=date;if(tab==="entry")fill()}
 function fill(){var r=(db[date]||{})[document.getElementById("tm").value];document.getElementById("sp").value=r?r.s:"";document.getElementById("cs").value=r?r.c:""}
 function saveOpen(){var raw=en(document.getElementById("op").value).trim(),o=(db[date]=db[date]||{});
@@ -138,36 +159,51 @@ var neg=chk.filter(function(r){return r.tank!=null&&r.tank<0})[0];if(neg)w.push(
 if(w.length&&!force){pending=[t,s,c];msg='<div class="warn"><b>تنبيه:</b> '+w.join(" ")+(mode==="cum"?" بما أن القراءة تراكمية، يجب التأكد من البيانات.":" تأكد من الأرقام.")+'<div class="bar"><button class="btn alt" data-a="force">حفظ كما هو</button></div></div>';return render2(t,s,c)}
 var d=(db[date]=db[date]||{});d._mode=d._mode||"period";d[t]={s:s,c:c};persist();pending=null;msg='<div class="okmsg">تم حفظ قراءة '+L(t)+".</div>";tab="entry";render()}
 function render2(t,s,c){render();document.getElementById("tm").value=t;document.getElementById("sp").value=isNaN(s)?"":s;document.getElementById("cs").value=isNaN(c)?"":c}
-function csvOf(ds){var out=["date,time,hours,period_consumption,period_supply,total_consumption,total_supply,avg_consumption_per_hour,avg_supply_per_hour,avg_difference,cumulative_difference,coverage_percent,tank_balance,status"];
-ds.forEach(function(d){rows(d).forEach(function(r){var c=cov(r);out.push([d,L(r.t),r.h,r.pc,r.ps,r.c,r.s,r.aC.toFixed(2),r.aS.toFixed(2),r.df.toFixed(2),r.cd,c==null?"":c.toFixed(2),r.tank==null?"":r.tank,r.ok?"supply>=consumption":"supply<consumption"].join(","))})});return out.join("\n")}
+function csvOf(ds){var tk=S.showTank;var out=["date,time,hours,period_consumption,period_supply,total_consumption,total_supply,avg_consumption_per_hour,avg_supply_per_hour,avg_difference,cumulative_difference,coverage_percent,"+(tk?"tank_balance,":"")+"status"];
+ds.forEach(function(d){rows(d).forEach(function(r){var c=cov(r);var a=[d,L(r.t),r.h,r.pc,r.ps,r.c,r.s,r.aC.toFixed(2),r.aS.toFixed(2),r.df.toFixed(2),r.cd,c==null?"":c.toFixed(2)];if(tk)a.push(r.tank==null?"":r.tank);a.push(r.ok?"supply>=consumption":"supply<consumption");out.push(a.join(","))})});return out.join("\n")}
 function showCsv(text){var b=document.getElementById("csvbox");b.innerHTML='<textarea id="ct" readonly></textarea><div class="bar"><button class="btn alt" data-a="copy">نسخ إلى الحافظة</button></div><p style="color:var(--muted);font-size:14px">الصق النص في Excel أو في ملف .csv.</p>';document.getElementById("ct").value=text}
 function dl(name,data,fb){var box=document.getElementById("csvbox");
-function fail(){if(fb){showCsv(fb);box.insertAdjacentHTML("afterbegin",'<div class="warn">تعذّر التنزيل المباشر. انسخ النص أدناه والصقه في Excel.</div>')}else{box.innerHTML='<div class="warn">التنزيل غير متاح هنا. استخدم زر «طباعة».</div>'}}
-try{if(!window.claude||!claude.use)return fail();
-claude.use("downloads").then(function(d){if(!d)return fail();
-return d.save({filename:name,data:data}).then(function(){box.innerHTML='<div class="okmsg">تم تجهيز الملف.</div>'},function(er){if(er&&er.code==="declined")return;fail()})}).catch(fail)}catch(x){fail()}}
-function reportDoc(d){var o=date;date=d;var h=report();date=o;h=h.replace(/<div class="bar">[\s\S]*$/,"");
-return'<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير '+d+'</title><style>body{font-family:Tahoma,Arial,sans-serif;max-width:900px;margin:20px auto;padding:0 12px;color:#12303b}h2{font-size:18px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px;text-align:center}.ok-t{color:#14733f}.bad-t{color:#b3261e}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.m{border-bottom:1px solid #ccc;padding:4px 0}.m span{display:block;font-size:12px;color:#555}.m b{font-size:20px}.m b i{font-size:12px;font-weight:400;font-style:normal}.status{font-size:22px;font-weight:bold;padding:10px;border-radius:6px}.status.ok{background:#e2f4ea;color:#14733f}.status.bad{background:#fbe6e4;color:#b3261e}.panel{margin-bottom:18px}</style></head><body>'+h+"</body></html>"}
-function seed(){db[date]={};[["04:00",500,520],["08:00",1000,1040],["12:00",1500,1560],["16:00",2000,2080],["20:00",2500,2600],["23:59",3000,3120]].forEach(function(x){db[date][x[0]]={s:x[1],c:x[2]}});persist();render()}
+try{var bl=new Blob([data],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(bl),k=document.createElement("a");k.href=u;k.download=name;document.body.appendChild(k);k.click();setTimeout(function(){URL.revokeObjectURL(u);k.remove()},1500);if(box)box.innerHTML='<div class="okmsg">تم تجهيز الملف.</div>'}
+catch(x){if(fb)showCsv(fb)}}
+function buildPA(){var pa=document.getElementById("pa");if(!pa){pa=document.createElement("div");pa.id="pa";pa.setAttribute("aria-hidden","true");document.body.appendChild(pa)}
+var h=report().replace(/<div class="bar">[\s\S]*$/,"");pa.innerHTML="<h1>متابعة التوريد مقابل السحب</h1>"+h;
+var mm=Math.ceil(pa.offsetHeight*0.2646)+2,st=document.getElementById("pg");if(!st){st=document.createElement("style");st.id="pg";document.head.appendChild(st)}
+st.textContent="@page{size:210mm "+mm+"mm;margin:0}";return pa}
+function loadJs(u){return new Promise(function(res,rej){var s=document.createElement("script");s.src=u;s.onload=res;s.onerror=rej;document.head.appendChild(s)})}
+function doPrint(){try{buildPA();window.print()}catch(x){}}
+function doPdf(){var box=document.getElementById("csvbox"),pa=buildPA(),nm="report-"+date+".pdf";
+function msgb(t,c){if(box)box.innerHTML='<div class="'+c+'">'+t+"</div>"}
+msgb("جارٍ إنشاء ملف PDF…","okmsg");
+var A=window.html2canvas?Promise.resolve():loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+A.then(function(){return window.jspdf?0:loadJs("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")})
+.then(function(){return(document.fonts&&document.fonts.ready)||0})
+.then(function(){return html2canvas(pa,{scale:2,backgroundColor:"#ffffff",scrollX:0,scrollY:0,onclone:function(d){var e=d.getElementById("pa");e.style.left="0";e.style.top="0"}})})
+.then(function(cv){var w=210,h=cv.height*w/cv.width,J=window.jspdf.jsPDF,pdf=new J({orientation:"p",unit:"mm",format:[w,h]});
+pdf.addImage(cv.toDataURL("image/jpeg",0.95),"JPEG",0,0,w,h);pdf.save(nm);msgb("تم تنزيل ملف PDF.","okmsg")})
+.catch(function(){msgb("تعذّر إنشاء PDF مباشرة، ستفتح نافذة الطباعة: اختر «حفظ كـ PDF».","warn");setTimeout(doPrint,600)})}
+window.addEventListener("beforeprint",function(){buildPA()});
+function tick(){var c=document.getElementById("clk");if(c)c.textContent=clockStr()}
+setInterval(tick,1000);
 document.addEventListener("click",function(e){var el=e.target.closest("[data-tab],[data-a],[data-open]");if(!el)return;
 if(el.dataset.tab){tab=el.dataset.tab;msg="";render()}
 else if(el.dataset.open){date=el.dataset.open;tab="report";render()}
 else{var a=el.dataset.a;
-if(a==="save")save();else if(a==="force")save(true);else if(a==="seed")seed();
-else if(a==="print"){try{window.print()}catch(x){}}
+if(a==="save")save();else if(a==="force")save(true);
+else if(a==="print")doPrint();else if(a==="pdf")doPdf()
 else if(a==="csv"){var x1=csvOf([date]);dl("report-"+date+".csv","\ufeff"+x1,x1)}
-else if(a==="html")dl("report-"+date+".html",reportDoc(date),"")
 else if(a==="csvall"){var f=hist.f||"",t=hist.t||"";var x2=csvOf(Object.keys(db).sort().filter(function(d){return(!f||d>=f)&&(!t||d<=t)}));dl("reports.csv","\ufeff"+x2,x2)}
 else if(a==="saveopen")saveOpen();
+else if(a==="savesettings"){S.sig=document.getElementById("sg").value.trim();S.showTank=document.getElementById("st").checked;saveS();msg='<div class="okmsg">تم حفظ الإعدادات.</div>';render()}
 else if(a==="reset"){if(el.dataset.armed){db={};persist();render()}else{el.dataset.armed="1";el.textContent="اضغط مرة أخرى لتأكيد المسح"}}
 else if(a==="copy"){var ta=document.getElementById("ct");ta.select();try{navigator.clipboard.writeText(ta.value)}catch(x){try{document.execCommand("copy")}catch(y){}}el.textContent="تم النسخ"}}});
 document.addEventListener("change",function(e){var i=e.target.id;
 if(i==="dt"){var v=en(e.target.value).trim();if(/^\d{4}-\d{2}-\d{2}$/.test(v)){date=v;msg="";render()}else{e.target.value=date}}
 else if(i==="tm"){fill()}
+else if(i==="st2"){S.showTank=e.target.checked;saveS();render()}
 else if(i==="md"){setMode(e.target.value)}
 else if(i==="hf"){hist.f=en(e.target.value).trim();render()}
 else if(i==="ht"){hist.t=en(e.target.value).trim();render()}});
-render();
+render();tick();
 </script>
 </body>
 </html>
