@@ -95,7 +95,8 @@ function rows(d){var o=db[d]||{},mode=o._mode||"period",out=[],ps=0,pc=0,sS=0,sC
 T.forEach(function(t){var r=o[t[0]];if(!r)return;var h=t[1],S,C,pS,pC;
 if(mode==="period"){pS=r.s;pC=r.c;sS+=pS;sC+=pC;S=sS;C=sC}else{S=r.s;C=r.c;pS=S-ps;pC=C-pc;ps=S;pc=C}
 var aS=S/h,aC=C/h,df=aS-aC;out.push({t:t[0],h:h,c:C,s:S,ps:pS,pc:pC,aC:aC,aS:aS,df:df,cd:S-C,ok:df>=0,open:t0,tank:t0==null?null:t0+S-C})});return out}
-function cov(r){return r.c>0?r.s/r.c*100:null}
+function cov(r){if(!(r.c>0))return null;if(r.s>=r.c)return(r.s-r.c)/r.c*100;if(!(r.s>0))return-100;return-(r.c-r.s)/r.s*100}
+function pct(c){if(c==null)return"—";var t=(c>0?"+":"")+n(c)+"%";return c<0?'<span class="bad-t">'+t+"</span>":c>0?'<span class="ok-t">'+t+"</span>":t}
 function stTxt(ok){return ok?"🟢 التوريد مساوي أو أعلى من السحب":"🔴 التوريد أقل من السحب"}
 function cls(ok){return ok?"ok-t":"bad-t"}
 function summary(r,label,hideTank){var c=cov(r);var dc='<span class="'+cls(r.ok)+'" style="display:inline;color:inherit">';
@@ -105,7 +106,7 @@ m("إجمالي كمية السحب",n(r.c),"طن")+m("إجمالي كمية ا�
 m("معدل السحب التراكمي",n(r.aC),"طن/ساعة")+m("معدل التوريد التراكمي",n(r.aS),"طن/ساعة")+
 m("فرق المعدل (توريد − سحب)",dc+sg(r.df)+"</span>","طن/ساعة")+
 m(label,dc+sg(r.cd)+"</span>","طن")+
-m("نسبة تغطية التوريد",c==null?"—":n(c)+"%","")+
+m("نسبة تغطية التوريد",pct(c),"")+
 m("الساعات المحتسبة",n(r.h),"ساعة")+"</div>"}
 function m(a,b,u){return'<div class="m"><span>'+a+"</span><b>"+b+(u?" <i>"+u+"</i>":"")+"</b></div>"}
 function table(rs,hideTank){if(!rs.length)return'<p style="color:var(--muted)">لا توجد قراءات لهذا اليوم بعد.</p>';var tk=rs[0].tank!=null&&!hideTank;
@@ -136,7 +137,7 @@ function hist(){var from=hist.f||"",to=hist.t||"";var ds=Object.keys(db).sort().
 var h='<div class="panel"><h2>التقارير السابقة</h2><div class="row2"><div><label for="hf">من</label><input id="hf" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10" value="'+from+'"></div><div><label for="ht">إلى</label><input id="ht" type="text" inputmode="numeric" dir="ltr" placeholder="YYYY-MM-DD" maxlength="10" value="'+to+'"></div></div>';
 if(!ds.length)return h+'<p style="color:var(--muted)">لا توجد تقارير في هذا النطاق.</p></div>';
 h+="<div class=scroll><table><tr><th>التاريخ</th><th>إجمالي السحب</th><th>إجمالي التوريد</th><th>معدل السحب</th><th>معدل التوريد</th><th>الفرق</th><th>التغطية</th><th>رصيد الخزان</th><th>الحالة</th><th></th></tr>";
-ds.forEach(function(d){var rs=rows(d),l=rs[rs.length-1];if(!l)return;var c=cov(l);h+="<tr><td>"+d+"</td><td>"+n(l.c)+"</td><td>"+n(l.s)+"</td><td>"+n(l.aC)+"</td><td>"+n(l.aS)+'</td><td class="'+cls(l.ok)+'">'+sg(l.df)+"</td><td>"+(c==null?"—":n(c)+"%")+"</td><td>"+(l.tank==null?"—":n(l.tank))+"</td><td>"+(l.ok?"🟢":"🔴")+'</td><td><button class="btn alt" style="min-height:36px;padding:4px 12px" data-open="'+d+'">فتح</button></td></tr>'});
+ds.forEach(function(d){var rs=rows(d),l=rs[rs.length-1];if(!l)return;var c=cov(l);h+="<tr><td>"+d+"</td><td>"+n(l.c)+"</td><td>"+n(l.s)+"</td><td>"+n(l.aC)+"</td><td>"+n(l.aS)+'</td><td class="'+cls(l.ok)+'">'+sg(l.df)+"</td><td>"+pct(c)+"</td><td>"+(l.tank==null?"—":n(l.tank))+"</td><td>"+(l.ok?"🟢":"🔴")+'</td><td><button class="btn alt" style="min-height:36px;padding:4px 12px" data-open="'+d+'">فتح</button></td></tr>'});
 return h+'</table></div><div class="bar"><button class="btn alt" data-a="csvall">تنزيل CSV</button><button class="btn alt" data-a="reset">مسح كل البيانات</button></div><div id="csvbox"></div></div>'}
 function settings(){return'<div class="panel"><h2>الإعدادات</h2><div style="margin-bottom:14px"><label for="sg">النص أسفل التقرير (يسار الصفحة): اسم أو رابط أو بريد</label><input id="sg" type="text" dir="auto" value="'+esc(S.sig)+'" placeholder="مثال: name@example.com"></div><label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:16px"><input type="checkbox" id="st" style="width:auto;min-height:0"'+(S.showTank?" checked":"")+'>إظهار رصيد الخزان في التقرير</label><div id="alert">'+msg+'</div><div class="bar"><button class="btn" data-a="savesettings">حفظ الإعدادات</button></div></div>'}
 var TABS=[["dash","لوحة المتابعة"],["entry","إدخال القراءة"],["report","التقرير اليومي"],["hist","التقارير السابقة"],["settings","الإعدادات"]];
